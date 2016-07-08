@@ -176,7 +176,7 @@ func (meCom *Port) ReadLineStr(aTmoMs int) (string, error) {
 		return "", ErrNotAttached
 	}
 
-	lBytes, lErr := meCom.readLine(aTmoMs)
+	lBytes, lErr := meCom.ReadLine(aTmoMs)
 
 	if lErr != nil {
 		return "", lErr
@@ -185,8 +185,12 @@ func (meCom *Port) ReadLineStr(aTmoMs int) (string, error) {
 	return string(lBytes), nil
 }
 
-// readLine reads a line from the given serial port
-func (meCom *Port) readLine(aTmoMs int) ([]byte, error) {
+// ReadLine reads a line from the given serial port
+func (meCom *Port) ReadLine(aTmoMs int) ([]byte, error) {
+	if meCom.port == nil {
+		return nil, ErrNotAttached
+	}
+
 	bRet := make([]byte, 0)
 
 	cIdx := 0
