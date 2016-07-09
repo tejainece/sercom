@@ -8,8 +8,11 @@ import (
 type (
 	//Port is a serial port communicator
 	Port struct {
+		//config is the serial port configuration
 		config serial.Config
-		port   *serial.Port
+
+		//port is the serial port
+		port *serial.Port
 
 		//Incomming buffer
 		inBuf string
@@ -17,37 +20,46 @@ type (
 		//Outgoing buffer
 		outBuf string
 
+		//record determines if data must be recorded
 		record bool
 	}
 )
 
+//MakePort creates the port from given configuration
 func MakePort(aConfig serial.Config) *Port {
 	return &Port{
 		config: aConfig,
 	}
 }
 
+//IsRecording returns if the data is being recorded
 func (meCom Port) IsRecording() bool {
 	return meCom.record
 }
 
+//StartRecording starts recording. It clears the record buffer.
 func (meCom *Port) StartRecording() {
-	meCom.ClearDebug()
+	meCom.ClearRecordingBuf()
 	meCom.record = true
 }
 
+//StopRecording stops recording. It doesn't clear the record buffer. Data
+//in the buffer can be obtained later using GetDebugInBuf.
 func (meCom *Port) StopRecording() {
 	meCom.record = false
 }
 
-func (meCom *Port) ClearDebug() {
+//ClearRecordingBuf clears recorded data
+func (meCom *Port) ClearRecordingBuf() {
 	meCom.inBuf = ""
 }
 
-func (meCom *Port) GetDebugInBuf() string {
+//GetRecordInBuf returns recorded in buffer
+func (meCom *Port) GetRecordInBuf() string {
 	return meCom.inBuf
 }
 
+//Open opens the serial port
 func (meCom *Port) Open() error {
 	if meCom.port != nil {
 		return ErrAttached
@@ -59,6 +71,7 @@ func (meCom *Port) Open() error {
 	return lErr
 }
 
+//Close closes the serial port
 func (meCom *Port) Close() error {
 	if meCom.port == nil {
 		return ErrNotAttached
@@ -70,6 +83,7 @@ func (meCom *Port) Close() error {
 	return lRet
 }
 
+//SendStr transmits the provided string over the serial port
 func (meCom *Port) SendStr(aStr string) error {
 	if meCom.port == nil {
 		return ErrNotAttached
@@ -88,6 +102,7 @@ func (meCom *Port) SendStr(aStr string) error {
 	return nil
 }
 
+//ReadMatchStr checks if the provided string is in the receive buffer
 func (meCom *Port) ReadMatchStr(aStr string, aTmoMs int) error {
 	if meCom.port == nil {
 		return ErrNotAttached
@@ -129,12 +144,13 @@ func (meCom *Port) ReadMatchStr(aStr string, aTmoMs int) error {
 	return nil
 }
 
+//ReadStr reads string from serial port receive buffer
 func (meCom *Port) ReadStr(aTmoMs int) (string, error) {
 	if meCom.port == nil {
 		return "", ErrNotAttached
 	}
 
-	lRet := make([]byte, 0)
+	var lRet []byte
 
 	lLen := 0
 
@@ -145,8 +161,6 @@ func (meCom *Port) ReadStr(aTmoMs int) (string, error) {
 		if bErr != nil {
 			if bErr != ErrRxTimeout {
 				return "", bErr
-			} else {
-				//TODO
 			}
 		} else {
 			if bRecNum != 0 {
@@ -171,6 +185,7 @@ func (meCom *Port) ReadStr(aTmoMs int) (string, error) {
 	return string(lRet[:lLen]), nil
 }
 
+//ReadLineStr reads a line from the serial port receive buffer
 func (meCom *Port) ReadLineStr(aTmoMs int) (string, error) {
 	if meCom.port == nil {
 		return "", ErrNotAttached
@@ -185,13 +200,13 @@ func (meCom *Port) ReadLineStr(aTmoMs int) (string, error) {
 	return string(lBytes), nil
 }
 
-// ReadLine reads a line from the given serial port
+// ReadLine reads a line from the serial port receive buffer
 func (meCom *Port) ReadLine(aTmoMs int) ([]byte, error) {
 	if meCom.port == nil {
 		return nil, ErrNotAttached
 	}
 
-	bRet := make([]byte, 0)
+	var bRet []byte
 
 	cIdx := 0
 	for {
@@ -242,4 +257,44 @@ func (meCom *Port) ReadLine(aTmoMs int) ([]byte, error) {
 	}
 
 	return bRet, nil
+}
+
+//ReadLen reads string of given length from the serial port receive buffer
+func (meCom *Port) ReadLen(aLen, aTmoMs int) (string, error) {
+	if meCom.port == nil {
+		return "", ErrNotAttached
+	}
+
+	lRet := make([]byte, 0, aLen)
+
+	for cIdx := 0; ; {
+		for cPos := 0; cPos < aLen; cPos++ {
+			bDummy := make([]byte, 1, 1)
+			bRecNum, bErr := meCom.port.Read(bDummy)
+
+			if bErr != nil {
+				if bErr != ErrRxTimeout {
+					return string(lRet), bErr
+				}
+			} else if bRecNum != 1 {
+				return string(lRet), ErrError
+			} else {
+				lRet = append(lRet, bDummy[0])
+			}
+		}
+
+		cIdx++
+
+		if cIdx > aTmoMs {
+			break
+		}
+
+		time.Sleep(time.Microsecond)
+	}
+
+	if meCom.record {
+		meCom.inBuf += string(lRet)
+	}
+
+	return string(lRet), nil
 }
