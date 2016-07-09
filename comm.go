@@ -260,12 +260,12 @@ func (meCom *Port) ReadLine(aTmoMs int) ([]byte, error) {
 }
 
 //ReadLen reads string of given length from the serial port receive buffer
-func (meCom *Port) ReadLen(aLen, aTmoMs int) (string, error) {
-	if meCom.port == nil {
-		return "", ErrNotAttached
-	}
-
+func (meCom *Port) ReadLen(aLen, aTmoMs int) ([]byte, error) {
 	lRet := make([]byte, 0, aLen)
+
+	if meCom.port == nil {
+		return lRet, ErrNotAttached
+	}
 
 	for cIdx := 0; ; {
 		for cPos := 0; cPos < aLen; cPos++ {
@@ -274,10 +274,10 @@ func (meCom *Port) ReadLen(aLen, aTmoMs int) (string, error) {
 
 			if bErr != nil {
 				if bErr != ErrRxTimeout {
-					return string(lRet), bErr
+					return lRet, bErr
 				}
 			} else if bRecNum != 1 {
-				return string(lRet), ErrError
+				return lRet, ErrError
 			} else {
 				lRet = append(lRet, bDummy[0])
 			}
@@ -296,5 +296,5 @@ func (meCom *Port) ReadLen(aLen, aTmoMs int) (string, error) {
 		meCom.inBuf += string(lRet)
 	}
 
-	return string(lRet), nil
+	return lRet, nil
 }
