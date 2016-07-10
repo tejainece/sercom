@@ -103,7 +103,7 @@ func (meCom *Port) SendStr(aStr string) error {
 	return nil
 }
 
-//SendStr transmits the provided string over the serial port
+//Send transmits the provided string over the serial port
 func (meCom *Port) Send(aData []byte) error {
 	if meCom.port == nil {
 		return ErrNotAttached
@@ -128,35 +128,21 @@ func (meCom *Port) ReadMatchStr(aStr string, aTmoMs int) error {
 		return ErrNotAttached
 	}
 
-	lDummy := [1]byte{}
-	cIdx := 0
+	lTmo := aTmoMs
+
 	for _, cChar := range aStr {
-		for {
-			bNum, bErr := meCom.port.Read(lDummy[:])
+		var bErr error
+		var bByte byte
 
-			if bErr != nil {
-				return bErr
-			}
+		bByte, lTmo, bErr = meCom.readByte(lTmo)
 
-			if bNum != 0 {
-				break
-			}
-
-			cIdx++
-
-			if cIdx > aTmoMs {
-				return ErrRxTimeout
-			}
-
-			time.Sleep(time.Millisecond)
+		if bErr != nil {
+			return bErr
 		}
 
-		if meCom.record {
-			meCom.inBuf = append(meCom.inBuf, lDummy[0])
-		}
 		//log.Printf("%c %c", cChar, lDummy[0])
 
-		if cChar != rune(lDummy[0]) {
+		if cChar != rune(bByte) {
 			return ErrNoMatch
 		}
 	}
@@ -227,52 +213,35 @@ func (meCom *Port) ReadLine(aTmoMs int) ([]byte, error) {
 
 	var bRet []byte
 
-	cIdx := 0
+	lTmo := aTmoMs
+
 	for {
-		bDummy := [1]byte{}
-		for {
-			bNum, bErr := meCom.port.Read(bDummy[:])
+		var bErr error
+		var bByte byte
+		bByte, lTmo, bErr = meCom.readByte(lTmo)
 
-			if bErr != nil {
-				return bRet, bErr
-			}
-
-			if bNum != 0 {
-				break
-			}
-
-			cIdx++
-
-			if cIdx > aTmoMs {
-				return bRet, ErrRxTimeout
-			}
-
-			time.Sleep(time.Microsecond)
+		if bErr != nil {
+			return bRet, bErr
 		}
 
-		if meCom.record {
-			meCom.inBuf = append(meCom.inBuf, bDummy[0])
-		}
-
-		if bDummy[0] == 10 {
-			if len(bDummy) == 0 {
-				bRet = append(bRet, bDummy[0])
+		if bByte == 10 {
+			if len(bRet) == 0 {
 				return bRet, ErrRxNoBody
 			}
 
 			bPrev := bRet[len(bRet)-1]
-			bRet = append(bRet, bDummy[0])
 
 			if bPrev == 13 {
-				bRet = bRet[:len(bRet)-2]
+				bRet = bRet[:len(bRet)-1]
 				break
 			} else {
 				return bRet, ErrRxNoCR
 			}
 		}
 
-		bRet = append(bRet, bDummy[0])
+		//log.Printf("%c", rune(bByte))
 
+		bRet = append(bRet, bByte)
 	}
 
 	return bRet, nil
@@ -321,4 +290,80 @@ mainLoop:
 	}
 
 	return lRet, lRetErr
+}
+
+func (meCom *Port) ReadLenStr(aLen, aTmoMs int) (string, error) {
+	lBytes, lErr := meCom.ReadLen(aLen, aTmoMs)
+
+	return string(lBytes), lErr
+}
+
+//ReadSep reads string from the serial port receive buffer until it hits a seperator
+func (meCom *Port) ReadSep(aSep rune, aTmoMs int) ([]byte, error) {
+	if meCom.port == nil {
+		return nil, ErrNotAttached
+	}
+
+	var bRet []byte
+
+	lTmo := aTmoMs
+
+	for {
+		var bErr error
+		var bByte byte
+		bByte, lTmo, bErr = meCom.readByte(lTmo)
+
+		if bErr != nil {
+			return bRet, bErr
+		}
+
+		if bByte == byte(aSep) {
+			return bRet, nil
+		}
+
+		//log.Printf("%c", rune(bDummy[0]))
+
+		bRet = append(bRet, bByte)
+	}
+}
+
+//ReadSep reads string from the serial port receive buffer until it hits a seperator
+func (meCom *Port) ReadSepStr(aSep rune, aTmoMs int) (string, error) {
+	lBytes, lErr := meCom.ReadSep(aSep, aTmoMs)
+
+	return string(lBytes), lErr
+}
+
+func (meCom *Port) readByte(aTmoIn int) (byte, int, error) {
+	if meCom.port == nil {
+		return 0, aTmoIn, ErrNotAttached
+	}
+
+	bDummy := [1]byte{}
+
+	for {
+		bNum, bErr := meCom.port.Read(bDummy[:])
+
+		if bErr != nil {
+			return 0, aTmoIn, bErr
+		}
+
+		if bNum != 0 {
+			break
+		}
+
+		if aTmoIn == 0 {
+			return 0, aTmoIn, ErrRxTimeout
+		}
+
+		aTmoIn--
+
+		time.Sleep(time.Microsecond)
+	}
+
+	if meCom.record {
+		meCom.inBuf = append(meCom.inBuf, bDummy[0])
+	}
+
+	return bDummy[0], aTmoIn, nil
 }

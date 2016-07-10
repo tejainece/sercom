@@ -17,4 +17,5 @@ const (
 	ErrRxNoCR      = Err("No carriage return in trailer!")
 	ErrNoMatch     = Err("Match not found!")
 	ErrWriteFail   = Err("Command write failed!")
+	ErrFormat      = Err("Format error!")
 )
